@@ -1,0 +1,4 @@
+-- 0001 baseline: intentionally empty.
+-- Proves the migration pipeline end to end before any real schema exists
+-- (local-dev-env spec); golang-migrate's schema_migrations table is the only
+-- side effect.
