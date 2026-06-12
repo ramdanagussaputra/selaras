@@ -1,0 +1,65 @@
+# Design D8: one workflow, two parallel jobs, no path filters — unconditional
+# runs keep branch-protection "required checks" semantics simple, and total
+# wall time stays well under the 5-minute budget.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: server/go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: server
+      - name: Vet
+        run: go vet ./...
+      - name: Test (includes dependency-rule test)
+        run: go test ./...
+      - name: Build
+        run: go build ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm run test -- --run
+      - name: Build
+        run: npm run build
+
+  # Proves the multi-stage build (web assets → Go embed → distroless) stays
+  # green between deploys; Render builds its own image on deploy (design D8).
+  docker-image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build production image
+        run: docker build -t selaras:${{ github.sha }} .
