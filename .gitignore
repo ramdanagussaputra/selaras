@@ -1,0 +1,64 @@
+.claude/
+CLAUDE.md
+AGENTS.md
+docs/*
+!docs/adr/
+openspec/
+
+# ── Environment & secrets ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Go (server/) ─────────────────────────────────────────────────────────
+server/bin/
+server/tmp/
+*.exe
+*.test
+*.out
+coverage.html
+coverage.txt
+vendor/
+
+# ── Node / Vite (web/) ───────────────────────────────────────────────────
+node_modules/
+web/dist/
+web/.vite/
+*.tsbuildinfo
+.eslintcache
+.pnpm-store/
+
+# ── Test & coverage artifacts ────────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+
+# ── Logs & debug ─────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ── Docker ───────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── OS ───────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+
+# ── Editors & IDEs ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# ── Misc ─────────────────────────────────────────────────────────────────
+tmp/
+*.bak
+.cache/

@@ -1,0 +1,13 @@
+.git
+.github
+.claude
+docs
+openspec
+web/node_modules
+web/dist
+server/bin
+server/tmp
+Makefile
+docker-compose.yml
+README.md
+CLAUDE.md
