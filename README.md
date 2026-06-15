@@ -2,7 +2,7 @@
 
 Real-time collaborative kanban — Go 1.26 + React 19 monorepo.
 
-**Live demo**: _coming soon_ <!-- TODO(task 8.4): replace with the Render URL -->
+**Live demo**: [selaras.onrender.com](https://selaras.onrender.com)
 
 ## Stack
 
