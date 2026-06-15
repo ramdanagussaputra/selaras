@@ -29,18 +29,18 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.Load()
+	configuration, err := config.Load()
 	if err != nil {
 		return err
 	}
 
-	logger := newLogger(cfg.Env)
+	logger := newLogger(configuration.Env)
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := postgres.NewPool(ctx, configuration.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -49,20 +49,20 @@ func run() error {
 	router := httpadapter.NewRouter(httpadapter.RouterConfig{
 		Logger:     logger,
 		Pinger:     postgres.NewPinger(pool),
-		CORSOrigin: cfg.CORSOrigin,
+		CORSOrigin: configuration.CORSOrigin,
 	})
 
-	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
+	server := &http.Server{
+		Addr:              fmt.Sprintf(":%d", configuration.Port),
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	serveErr := make(chan error, 1)
 	go func() {
-		serveErr <- srv.ListenAndServe()
+		serveErr <- server.ListenAndServe()
 	}()
-	logger.Info("api listening", "port", cfg.Port, "env", cfg.Env)
+	logger.Info("api listening", "port", configuration.Port, "env", configuration.Env)
 
 	select {
 	case err := <-serveErr:
@@ -75,7 +75,7 @@ func run() error {
 	drainCtx, cancel := context.WithTimeout(context.Background(), shutdownDrain)
 	defer cancel()
 
-	if err := srv.Shutdown(drainCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := server.Shutdown(drainCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("draining http server: %w", err)
 	}
 
@@ -84,8 +84,8 @@ func run() error {
 	return nil
 }
 
-func newLogger(env string) *slog.Logger {
-	if env == config.EnvProduction {
+func newLogger(environment string) *slog.Logger {
+	if environment == config.EnvProduction {
 		return slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	}
 

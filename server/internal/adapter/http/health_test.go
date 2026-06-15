@@ -40,26 +40,26 @@ func TestHealthHandler(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			handler := httpadapter.NewHealthHandler(
-				fakePinger{err: tt.pingErr},
+				fakePinger{err: testCase.pingErr},
 				slog.New(slog.DiscardHandler),
 			)
 
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
-			if rec.Code != tt.wantCode {
-				t.Errorf("status code = %d, want %d", rec.Code, tt.wantCode)
+			if recorder.Code != testCase.wantCode {
+				t.Errorf("status code = %d, want %d", recorder.Code, testCase.wantCode)
 			}
 
 			var body map[string]string
-			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-				t.Fatalf("response is not JSON: %v (body %q)", err, rec.Body.String())
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+				t.Fatalf("response is not JSON: %v (body %q)", err, recorder.Body.String())
 			}
-			if body["status"] != tt.wantStatus {
-				t.Errorf(`body status = %q, want %q`, body["status"], tt.wantStatus)
+			if body["status"] != testCase.wantStatus {
+				t.Errorf(`body status = %q, want %q`, body["status"], testCase.wantStatus)
 			}
 		})
 	}

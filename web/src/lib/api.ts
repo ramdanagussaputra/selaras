@@ -14,15 +14,15 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const response = await fetch(path, {
     ...init,
     headers: { Accept: 'application/json', ...init?.headers },
   });
 
-  const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
+  const body: unknown = response.status === 204 ? null : await response.json().catch(() => null);
 
-  if (!res.ok) {
-    throw new ApiError(res.status, body);
+  if (!response.ok) {
+    throw new ApiError(response.status, body);
   }
 
   return body as T;

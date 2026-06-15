@@ -16,17 +16,17 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
-			next.ServeHTTP(ww, r)
+			next.ServeHTTP(wrappedWriter, r)
 
 			logger.InfoContext(r.Context(), "request",
 				"request_id", middleware.GetReqID(r.Context()),
 				"method", r.Method,
 				"path", r.URL.Path,
-				"status", ww.Status(),
+				"status", wrappedWriter.Status(),
 				"duration_ms", time.Since(start).Milliseconds(),
-				"bytes", ww.BytesWritten(),
+				"bytes", wrappedWriter.BytesWritten(),
 			)
 		})
 	}
@@ -38,20 +38,20 @@ func recoverPanic(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				rec := recover()
-				if rec == nil {
+				recovered := recover()
+				if recovered == nil {
 					return
 				}
 				// Re-panic so the server can abort the connection cleanly.
-				if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-					panic(rec)
+				if err, ok := recovered.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+					panic(recovered)
 				}
 
 				logger.ErrorContext(r.Context(), "panic recovered",
 					"request_id", middleware.GetReqID(r.Context()),
 					"method", r.Method,
 					"path", r.URL.Path,
-					"panic", rec,
+					"panic", recovered,
 					"stack", string(debug.Stack()),
 				)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
