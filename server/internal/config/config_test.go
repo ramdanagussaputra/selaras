@@ -72,22 +72,22 @@ func TestLoad(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
 			for _, key := range []string{"PORT", "DATABASE_URL", "ENV", "CORS_ORIGIN"} {
 				t.Setenv(key, "")
-				if v, ok := tt.env[key]; ok {
+				if v, ok := testCase.env[key]; ok {
 					t.Setenv(key, v)
 				}
 			}
 
 			got, err := config.Load()
 
-			if len(tt.wantErrs) > 0 {
+			if len(testCase.wantErrs) > 0 {
 				if err == nil {
-					t.Fatalf("Load() = %+v, want error containing %v", got, tt.wantErrs)
+					t.Fatalf("Load() = %+v, want error containing %v", got, testCase.wantErrs)
 				}
-				for _, want := range tt.wantErrs {
+				for _, want := range testCase.wantErrs {
 					if !strings.Contains(err.Error(), want) {
 						t.Errorf("error %q missing %q", err, want)
 					}
@@ -98,8 +98,8 @@ func TestLoad(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() unexpected error: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("Load() = %+v, want %+v", got, tt.want)
+			if got != testCase.want {
+				t.Errorf("Load() = %+v, want %+v", got, testCase.want)
 			}
 		})
 	}

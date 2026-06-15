@@ -19,17 +19,17 @@ type RouterConfig struct {
 
 // NewRouter assembles middleware and routes. Order matters: the request ID
 // must exist before logging, and recovery must wrap everything below it.
-func NewRouter(cfg RouterConfig) http.Handler {
+func NewRouter(config RouterConfig) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(requestLogger(cfg.Logger))
-	r.Use(recoverPanic(cfg.Logger))
-	if cfg.CORSOrigin != "" {
-		r.Use(corsOrigin(cfg.CORSOrigin))
+	r.Use(requestLogger(config.Logger))
+	r.Use(recoverPanic(config.Logger))
+	if config.CORSOrigin != "" {
+		r.Use(corsOrigin(config.CORSOrigin))
 	}
 
-	r.Method(http.MethodGet, "/healthz", NewHealthHandler(cfg.Pinger, cfg.Logger))
+	r.Method(http.MethodGet, "/healthz", NewHealthHandler(config.Pinger, config.Logger))
 
 	r.NotFound(spaFallback())
 

@@ -28,7 +28,7 @@ type Config struct {
 func Load() (Config, error) {
 	var errs []error
 
-	cfg := Config{
+	configuration := Config{
 		Port:        8080,
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		Env:         EnvDevelopment,
@@ -39,20 +39,20 @@ func Load() (Config, error) {
 		port, err := strconv.Atoi(raw)
 		isValidPort := err == nil && port > 0 && port <= 65535
 		if isValidPort {
-			cfg.Port = port
+			configuration.Port = port
 		} else {
 			errs = append(errs, fmt.Errorf("PORT must be an integer in 1-65535, got %q", raw))
 		}
 	}
 
-	if cfg.DatabaseURL == "" {
+	if configuration.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))
 	}
 
 	if raw := os.Getenv("ENV"); raw != "" {
 		switch raw {
 		case EnvDevelopment, EnvProduction:
-			cfg.Env = raw
+			configuration.Env = raw
 		default:
 			errs = append(errs, fmt.Errorf("ENV must be %q or %q, got %q", EnvDevelopment, EnvProduction, raw))
 		}
@@ -62,5 +62,5 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))
 	}
 
-	return cfg, nil
+	return configuration, nil
 }

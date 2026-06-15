@@ -14,7 +14,7 @@ const domainPrefix = "github.com/ramdanaguss/selaras/server/internal/domain"
 // standard library and other domain packages. It runs as a plain test so
 // `make test` and the CI server job enforce the rule with no extra wiring.
 func TestDomainImportsStdlibOnly(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "-json", "./...").Output()
+	output, err := exec.Command("go", "list", "-deps", "-json", "./...").Output()
 	if err != nil {
 		t.Fatalf("go list -deps failed: %v", err)
 	}
@@ -25,17 +25,17 @@ func TestDomainImportsStdlibOnly(t *testing.T) {
 	}
 
 	var violations []string
-	dec := json.NewDecoder(strings.NewReader(string(out)))
-	for dec.More() {
-		var p pkg
-		if err := dec.Decode(&p); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(output)))
+	for decoder.More() {
+		var listed pkg
+		if err := decoder.Decode(&listed); err != nil {
 			t.Fatalf("decoding go list output: %v", err)
 		}
 
-		if p.Standard || strings.HasPrefix(p.ImportPath, domainPrefix) {
+		if listed.Standard || strings.HasPrefix(listed.ImportPath, domainPrefix) {
 			continue
 		}
-		violations = append(violations, p.ImportPath)
+		violations = append(violations, listed.ImportPath)
 	}
 
 	if len(violations) > 0 {
