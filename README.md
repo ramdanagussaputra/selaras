@@ -2,14 +2,14 @@
 
 Real-time collaborative kanban — Go 1.26 + React 19 monorepo.
 
-**Live demo**: _coming soon_ <!-- TODO(task 8.4): replace with the Railway URL -->
+**Live demo**: _coming soon_ <!-- TODO(task 8.4): replace with the Render URL -->
 
 ## Stack
 
 - **API** — Go 1.26, chi, pgx, golang-migrate, `log/slog`; pragmatic hexagonal
   layout with the Clean Architecture dependency rule enforced by a test
 - **Web** — React 19 + TypeScript + Vite, TanStack Query, React Router v7, Tailwind
-- **Infra** — Postgres 16, multi-stage Docker (distroless, < 30 MB), GitHub Actions, Railway
+- **Infra** — Postgres 16, multi-stage Docker (distroless, < 30 MB), GitHub Actions, Render
 
 ## Local setup (3 commands)
 
