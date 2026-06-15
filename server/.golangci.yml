@@ -11,6 +11,28 @@ linters:
     - revive
     - unconvert
     - unparam
+    - varnamelen
+  settings:
+    varnamelen:
+      min-name-length: 4
+      check-receiver: false
+      ignore-names:
+        - err
+        - ctx
+        - id
+        - ok
+        - tx
+        - i
+        - w
+        - r
+        - raw
+        - got
+        - key
+      ignore-decls:
+        - w http.ResponseWriter
+        - r *http.Request
+        - i int
+        - t *testing.T
 
 formatters:
   enable:
