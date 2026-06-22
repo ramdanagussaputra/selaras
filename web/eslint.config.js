@@ -18,5 +18,12 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      'id-length': ['error', {
+        min: 4,
+        exceptions: ['i', 'id', 'e', 'r', 'w', 'err'],
+        properties: 'never',
+      }],
+    },
   },
 ])

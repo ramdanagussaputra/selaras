@@ -16,6 +16,8 @@ import (
 
 	httpadapter "github.com/ramdanaguss/selaras/server/internal/adapter/http"
 	"github.com/ramdanaguss/selaras/server/internal/adapter/postgres"
+	"github.com/ramdanaguss/selaras/server/internal/adapter/security"
+	appauth "github.com/ramdanaguss/selaras/server/internal/app/auth"
 	"github.com/ramdanaguss/selaras/server/internal/config"
 )
 
@@ -29,40 +31,56 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.Load()
+	configuration, err := config.Load()
 	if err != nil {
 		return err
 	}
 
-	logger := newLogger(cfg.Env)
+	logger := newLogger(configuration.Env)
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := postgres.NewPool(ctx, configuration.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
+	authService, err := appauth.NewService(
+		postgres.NewUserRepository(pool),
+		postgres.NewRefreshTokenRepository(pool),
+		security.NewArgon2idHasher(),
+		security.NewAccessTokenIssuer(configuration.JWTSecret, configuration.AccessTokenTTL),
+		security.NewRefreshTokenFactory(),
+		security.SystemClock{},
+		configuration.RefreshTokenTTL,
+	)
+	if err != nil {
+		return fmt.Errorf("building auth service: %w", err)
+	}
+
 	router := httpadapter.NewRouter(httpadapter.RouterConfig{
-		Logger:     logger,
-		Pinger:     postgres.NewPinger(pool),
-		CORSOrigin: cfg.CORSOrigin,
+		Logger:          logger,
+		Pinger:          postgres.NewPinger(pool),
+		CORSOrigin:      configuration.CORSOrigin,
+		AuthService:     authService,
+		SecureCookies:   configuration.Env == config.EnvProduction,
+		RefreshTokenTTL: configuration.RefreshTokenTTL,
 	})
 
-	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
+	server := &http.Server{
+		Addr:              fmt.Sprintf(":%d", configuration.Port),
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	serveErr := make(chan error, 1)
 	go func() {
-		serveErr <- srv.ListenAndServe()
+		serveErr <- server.ListenAndServe()
 	}()
-	logger.Info("api listening", "port", cfg.Port, "env", cfg.Env)
+	logger.Info("api listening", "port", configuration.Port, "env", configuration.Env)
 
 	select {
 	case err := <-serveErr:
@@ -75,7 +93,7 @@ func run() error {
 	drainCtx, cancel := context.WithTimeout(context.Background(), shutdownDrain)
 	defer cancel()
 
-	if err := srv.Shutdown(drainCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := server.Shutdown(drainCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("draining http server: %w", err)
 	}
 
@@ -84,8 +102,8 @@ func run() error {
 	return nil
 }
 
-func newLogger(env string) *slog.Logger {
-	if env == config.EnvProduction {
+func newLogger(environment string) *slog.Logger {
+	if environment == config.EnvProduction {
 		return slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	}
 

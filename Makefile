@@ -3,6 +3,8 @@
 
 DATABASE_URL ?= postgres://selaras:selaras@localhost:5432/selaras?sslmode=disable
 CORS_ORIGIN  ?= http://localhost:5173
+# Dev-only signing secret (≥32 bytes). Production sets a real JWT_SECRET in Render.
+JWT_SECRET   ?= dev-only-insecure-jwt-secret-change-me
 
 MIGRATE        := cd server && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 GOLANGCI_LINT  := cd server && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
@@ -16,7 +18,7 @@ dev:
 	$(MAKE) -j2 dev-server dev-web
 
 dev-server:
-	cd server && DATABASE_URL='$(DATABASE_URL)' CORS_ORIGIN='$(CORS_ORIGIN)' go run ./cmd/api
+	cd server && DATABASE_URL='$(DATABASE_URL)' CORS_ORIGIN='$(CORS_ORIGIN)' JWT_SECRET='$(JWT_SECRET)' go run ./cmd/api
 
 dev-web:
 	cd web && npm run dev
