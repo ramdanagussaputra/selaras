@@ -13,6 +13,18 @@ export class ApiError extends Error {
   }
 }
 
+// apiErrorMessage extracts the server's user-facing message from the error
+// envelope ({"error":{"code","message"}}), falling back to a generic string.
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && typeof error.body === 'object' && error.body !== null) {
+    const envelope = error.body as { error?: { message?: string } };
+    if (envelope.error?.message) {
+      return envelope.error.message;
+    }
+  }
+  return fallback;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
