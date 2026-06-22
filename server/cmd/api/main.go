@@ -16,6 +16,8 @@ import (
 
 	httpadapter "github.com/ramdanaguss/selaras/server/internal/adapter/http"
 	"github.com/ramdanaguss/selaras/server/internal/adapter/postgres"
+	"github.com/ramdanaguss/selaras/server/internal/adapter/security"
+	appauth "github.com/ramdanaguss/selaras/server/internal/app/auth"
 	"github.com/ramdanaguss/selaras/server/internal/config"
 )
 
@@ -46,10 +48,26 @@ func run() error {
 	}
 	defer pool.Close()
 
+	authService, err := appauth.NewService(
+		postgres.NewUserRepository(pool),
+		postgres.NewRefreshTokenRepository(pool),
+		security.NewArgon2idHasher(),
+		security.NewAccessTokenIssuer(configuration.JWTSecret, configuration.AccessTokenTTL),
+		security.NewRefreshTokenFactory(),
+		security.SystemClock{},
+		configuration.RefreshTokenTTL,
+	)
+	if err != nil {
+		return fmt.Errorf("building auth service: %w", err)
+	}
+
 	router := httpadapter.NewRouter(httpadapter.RouterConfig{
-		Logger:     logger,
-		Pinger:     postgres.NewPinger(pool),
-		CORSOrigin: configuration.CORSOrigin,
+		Logger:          logger,
+		Pinger:          postgres.NewPinger(pool),
+		CORSOrigin:      configuration.CORSOrigin,
+		AuthService:     authService,
+		SecureCookies:   configuration.Env == config.EnvProduction,
+		RefreshTokenTTL: configuration.RefreshTokenTTL,
 	})
 
 	server := &http.Server{
