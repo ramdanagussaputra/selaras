@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	appauth "github.com/ramdanaguss/selaras/server/internal/app/auth"
+	appboard "github.com/ramdanaguss/selaras/server/internal/app/board"
 	"github.com/ramdanaguss/selaras/server/internal/domain/health"
 )
 
@@ -16,10 +17,11 @@ import (
 type RouterConfig struct {
 	Logger          *slog.Logger
 	Pinger          health.Pinger
-	CORSOrigin      string           // empty disables the CORS middleware
-	AuthService     *appauth.Service // nil disables the /api/v1 auth routes
-	SecureCookies   bool             // true sets Secure on the refresh cookie (prod)
-	RefreshTokenTTL time.Duration    // refresh cookie max-age
+	CORSOrigin      string            // empty disables the CORS middleware
+	AuthService     *appauth.Service  // nil disables the /api/v1 auth routes
+	BoardService    *appboard.Service // nil disables the /api/v1 board routes
+	SecureCookies   bool              // true sets Secure on the refresh cookie (prod)
+	RefreshTokenTTL time.Duration     // refresh cookie max-age
 }
 
 // NewRouter assembles middleware and routes. Order matters: the request ID
@@ -62,5 +64,35 @@ func mountAuthRoutes(r chi.Router, config RouterConfig) {
 		})
 
 		apiRouter.With(requireAuth(config.AuthService, config.Logger)).Get("/me", handler.Me)
+
+		if config.BoardService != nil {
+			mountBoardRoutes(apiRouter, config)
+		}
+	})
+}
+
+// mountBoardRoutes wires the kanban surface under the same /api/v1 group, all
+// behind Bearer auth (spec 03-kanban-crud contract table). Columns and cards are
+// addressed top-level (PATCH/DELETE /columns/{id}, /cards/{id}); the use cases
+// resolve the owning board from the leaf id for authorization (design D7).
+func mountBoardRoutes(apiRouter chi.Router, config RouterConfig) {
+	handler := NewBoardHandler(config.BoardService, config.Logger)
+
+	apiRouter.Group(func(protected chi.Router) {
+		protected.Use(requireAuth(config.AuthService, config.Logger))
+
+		protected.Get("/boards", handler.ListBoards)
+		protected.Post("/boards", handler.CreateBoard)
+		protected.Get("/boards/{id}", handler.GetBoard)
+		protected.Patch("/boards/{id}", handler.RenameBoard)
+		protected.Delete("/boards/{id}", handler.DeleteBoard)
+
+		protected.Post("/boards/{id}/columns", handler.CreateColumn)
+		protected.Patch("/columns/{id}", handler.UpdateColumn)
+		protected.Delete("/columns/{id}", handler.DeleteColumn)
+
+		protected.Post("/columns/{id}/cards", handler.CreateCard)
+		protected.Patch("/cards/{id}", handler.UpdateCard)
+		protected.Delete("/cards/{id}", handler.DeleteCard)
 	})
 }

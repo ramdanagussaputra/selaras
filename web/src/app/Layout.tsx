@@ -1,6 +1,7 @@
 import { Link, Outlet, useNavigate } from 'react-router';
 
 import { HealthBadge } from '../components/HealthBadge';
+import { Toaster } from '../components/Toaster';
 import { useAuth } from '../features/auth/authContext';
 import { useApiHealth } from './useApiHealth';
 
@@ -50,6 +51,7 @@ export function Layout() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <Outlet />
       </main>
+      <Toaster />
     </div>
   );
 }
