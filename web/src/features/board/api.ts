@@ -2,6 +2,14 @@
 // token and the refresh-once-on-401 behavior, exactly like the rest of the app.
 
 import { authFetch } from '../../lib/authClient';
+import { getConnectionId } from './connection';
+
+// withConnId stamps the originating WebSocket connection id on a mutation, so the
+// broadcast it triggers is suppressed as an echo on this client (design D7).
+function withConnId(headers: Record<string, string> = {}): Record<string, string> {
+  const connectionId = getConnectionId();
+  return connectionId ? { ...headers, 'X-Conn-Id': connectionId } : headers;
+}
 
 export interface Board {
   id: string;
@@ -45,7 +53,7 @@ export async function listBoards(): Promise<Board[]> {
 export async function createBoard(title: string): Promise<Board> {
   const response = await authFetch<{ board: Board }>('/api/v1/boards', {
     method: 'POST',
-    headers: jsonHeaders,
+    headers: withConnId(jsonHeaders),
     body: JSON.stringify({ title }),
   });
   return response.board;
@@ -58,13 +66,13 @@ export async function getBoard(boardId: string): Promise<BoardTree> {
 export async function renameBoard(boardId: string, title: string): Promise<void> {
   await authFetch(`/api/v1/boards/${boardId}`, {
     method: 'PATCH',
-    headers: jsonHeaders,
+    headers: withConnId(jsonHeaders),
     body: JSON.stringify({ title }),
   });
 }
 
 export async function deleteBoard(boardId: string): Promise<void> {
-  await authFetch(`/api/v1/boards/${boardId}`, { method: 'DELETE' });
+  await authFetch(`/api/v1/boards/${boardId}`, { method: 'DELETE', headers: withConnId() });
 }
 
 export async function createColumn(
@@ -74,7 +82,7 @@ export async function createColumn(
 ): Promise<ColumnWithCards> {
   const response = await authFetch<{ column: ColumnWithCards }>(
     `/api/v1/boards/${boardId}/columns`,
-    { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ title, position }) },
+    { method: 'POST', headers: withConnId(jsonHeaders), body: JSON.stringify({ title, position }) },
   );
   return response.column;
 }
@@ -87,19 +95,19 @@ export interface ColumnPatch {
 export async function updateColumn(columnId: string, patch: ColumnPatch): Promise<void> {
   await authFetch(`/api/v1/columns/${columnId}`, {
     method: 'PATCH',
-    headers: jsonHeaders,
+    headers: withConnId(jsonHeaders),
     body: JSON.stringify(patch),
   });
 }
 
 export async function deleteColumn(columnId: string): Promise<void> {
-  await authFetch(`/api/v1/columns/${columnId}`, { method: 'DELETE' });
+  await authFetch(`/api/v1/columns/${columnId}`, { method: 'DELETE', headers: withConnId() });
 }
 
 export async function createCard(columnId: string, title: string, position?: number): Promise<Card> {
   const response = await authFetch<{ card: Card }>(`/api/v1/columns/${columnId}/cards`, {
     method: 'POST',
-    headers: jsonHeaders,
+    headers: withConnId(jsonHeaders),
     body: JSON.stringify({ title, position }),
   });
   return response.card;
@@ -115,11 +123,11 @@ export interface CardPatch {
 export async function updateCard(cardId: string, patch: CardPatch): Promise<void> {
   await authFetch(`/api/v1/cards/${cardId}`, {
     method: 'PATCH',
-    headers: jsonHeaders,
+    headers: withConnId(jsonHeaders),
     body: JSON.stringify(patch),
   });
 }
 
 export async function deleteCard(cardId: string): Promise<void> {
-  await authFetch(`/api/v1/cards/${cardId}`, { method: 'DELETE' });
+  await authFetch(`/api/v1/cards/${cardId}`, { method: 'DELETE', headers: withConnId() });
 }
