@@ -301,11 +301,13 @@ func TestLogoutEndpoint(t *testing.T) {
 
 func TestRateLimit(t *testing.T) {
 	handler := newTestRouter(t)
-	body := `{"email":"user@example.com","password":"wrongpass"}`
 
+	// Probe via /refresh with no cookie: it is rejected fast (no argon2 work), so
+	// the per-IP burst is exhausted before the token bucket can refill — keeping
+	// the assertion deterministic even under the race detector's slowdown.
 	var lastStatus int
 	for attempt := 0; attempt < rateLimitProbe; attempt++ {
-		resp := do(t, handler, http.MethodPost, "/api/v1/auth/login", body, nil, "")
+		resp := do(t, handler, http.MethodPost, "/api/v1/auth/refresh", "", nil, "")
 		lastStatus = resp.StatusCode
 		_ = resp.Body.Close()
 	}
