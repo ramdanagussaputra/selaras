@@ -5,13 +5,15 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5/middleware"
 
 	domain "github.com/ramdanaguss/selaras/server/internal/domain/auth"
+	boarddomain "github.com/ramdanaguss/selaras/server/internal/domain/board"
 )
 
-// Machine-readable error codes (spec 02-auth contract table).
+// Machine-readable error codes (spec 02-auth and 03-kanban-crud contract tables).
 const (
 	codeValidationFailed   = "VALIDATION_FAILED"
 	codeEmailTaken         = "EMAIL_TAKEN"
@@ -20,6 +22,9 @@ const (
 	codeTokenExpired       = "TOKEN_EXPIRED"
 	codeTokenReused        = "TOKEN_REUSED"
 	codeRateLimited        = "RATE_LIMITED"
+	codeNotFound           = "NOT_FOUND"
+	codeForbidden          = "FORBIDDEN"
+	codeConflict           = "CONFLICT"
 	codeInternal           = "INTERNAL"
 )
 
@@ -57,6 +62,15 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 		return
 	}
 
+	// Board validation is a wrapped sentinel carrying a user-facing message
+	// ("validation failed: title must not be empty"); surface the detail after
+	// the sentinel prefix so the client can show which field failed.
+	if errors.Is(err, boarddomain.ErrValidation) {
+		writeErrorCode(w, http.StatusUnprocessableEntity, codeValidationFailed,
+			strings.TrimPrefix(err.Error(), boarddomain.ErrValidation.Error()+": "))
+		return
+	}
+
 	status, code := mapError(err)
 
 	switch {
@@ -86,6 +100,12 @@ func mapError(err error) (int, string) {
 	case errors.Is(err, domain.ErrUserNotFound):
 		// A valid token whose user no longer exists is a dead session.
 		return http.StatusUnauthorized, codeTokenInvalid
+	case errors.Is(err, boarddomain.ErrNotFound):
+		return http.StatusNotFound, codeNotFound
+	case errors.Is(err, boarddomain.ErrForbidden):
+		return http.StatusForbidden, codeForbidden
+	case errors.Is(err, boarddomain.ErrConflict):
+		return http.StatusConflict, codeConflict
 	default:
 		return http.StatusInternalServerError, codeInternal
 	}
@@ -107,6 +127,12 @@ func userMessage(code string) string {
 		return "the token is invalid"
 	case codeRateLimited:
 		return "too many requests, please slow down"
+	case codeNotFound:
+		return "not found"
+	case codeForbidden:
+		return "you do not have permission to perform this action"
+	case codeConflict:
+		return "the request conflicted with a concurrent change, please retry"
 	default:
 		return "an unexpected error occurred"
 	}

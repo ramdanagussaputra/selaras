@@ -18,6 +18,7 @@ import (
 	"github.com/ramdanaguss/selaras/server/internal/adapter/postgres"
 	"github.com/ramdanaguss/selaras/server/internal/adapter/security"
 	appauth "github.com/ramdanaguss/selaras/server/internal/app/auth"
+	appboard "github.com/ramdanaguss/selaras/server/internal/app/board"
 	"github.com/ramdanaguss/selaras/server/internal/config"
 )
 
@@ -61,11 +62,14 @@ func run() error {
 		return fmt.Errorf("building auth service: %w", err)
 	}
 
+	boardService := appboard.NewService(postgres.NewBoardRepository(pool), security.SystemClock{})
+
 	router := httpadapter.NewRouter(httpadapter.RouterConfig{
 		Logger:          logger,
 		Pinger:          postgres.NewPinger(pool),
 		CORSOrigin:      configuration.CORSOrigin,
 		AuthService:     authService,
+		BoardService:    boardService,
 		SecureCookies:   configuration.Env == config.EnvProduction,
 		RefreshTokenTTL: configuration.RefreshTokenTTL,
 	})
