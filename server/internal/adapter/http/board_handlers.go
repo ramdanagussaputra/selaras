@@ -12,19 +12,40 @@ import (
 	board "github.com/ramdanaguss/selaras/server/internal/domain/board"
 )
 
+// connIDHeader carries the originating WebSocket connection id on REST mutations,
+// so the broadcast can stamp it and that connection suppresses its own echo (D7).
+const connIDHeader = "X-Conn-Id"
+
 // BoardHandler serves the kanban endpoints under the Bearer-protected /api/v1
 // subrouter. Each handler resolves the caller from the request context (injected
 // by requireAuth), drives a use case, and maps the result — or a domain error —
-// to the shared JSON envelope. The use cases also return []board.Event; M3
-// discards them here, and M4 will forward them to the realtime broadcaster.
+// to the shared JSON envelope. After a mutation commits, it publishes the use
+// case's []board.Event to the broadcaster for realtime fan-out (design D8).
 type BoardHandler struct {
-	service *appboard.Service
-	logger  *slog.Logger
+	service     *appboard.Service
+	broadcaster appboard.Broadcaster
+	logger      *slog.Logger
 }
 
-// NewBoardHandler constructs the handler.
-func NewBoardHandler(service *appboard.Service, logger *slog.Logger) *BoardHandler {
-	return &BoardHandler{service: service, logger: logger}
+// NewBoardHandler constructs the handler. A nil broadcaster falls back to a no-op,
+// so REST works with realtime disabled.
+func NewBoardHandler(service *appboard.Service, broadcaster appboard.Broadcaster, logger *slog.Logger) *BoardHandler {
+	if broadcaster == nil {
+		broadcaster = appboard.NoopBroadcaster{}
+	}
+	return &BoardHandler{service: service, broadcaster: broadcaster, logger: logger}
+}
+
+// publish fans a mutation's events out to the board's room, stamped with the
+// acting user and the originating connection id. Called only after the use case
+// returns (its transaction already committed), so a rolled-back change is never
+// broadcast (design D8).
+func (h *BoardHandler) publish(r *http.Request, events []board.Event) {
+	if len(events) == 0 {
+		return
+	}
+	userID, _ := userIDFromContext(r.Context())
+	h.broadcaster.Broadcast(events, userID, r.Header.Get(connIDHeader))
 }
 
 // --- wire shapes -------------------------------------------------------------
@@ -155,11 +176,12 @@ func (h *BoardHandler) CreateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, _, err := h.service.CreateBoard(r.Context(), userID, input.Title)
+	created, events, err := h.service.CreateBoard(r.Context(), userID, input.Title)
 	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	writeJSON(w, http.StatusCreated, boardEnvelope{Board: toBoardResponse(created)})
 }
 
@@ -201,10 +223,12 @@ func (h *BoardHandler) RenameBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.service.RenameBoard(r.Context(), userID, chi.URLParam(r, "id"), input.Title); err != nil {
+	events, err := h.service.RenameBoard(r.Context(), userID, chi.URLParam(r, "id"), input.Title)
+	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -216,10 +240,12 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.service.DeleteBoard(r.Context(), userID, chi.URLParam(r, "id")); err != nil {
+	events, err := h.service.DeleteBoard(r.Context(), userID, chi.URLParam(r, "id"))
+	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -238,11 +264,12 @@ func (h *BoardHandler) CreateColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, _, err := h.service.CreateColumn(r.Context(), userID, chi.URLParam(r, "id"), input.Title, input.Position)
+	created, events, err := h.service.CreateColumn(r.Context(), userID, chi.URLParam(r, "id"), input.Title, input.Position)
 	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	writeJSON(w, http.StatusCreated, columnEnvelope{Column: toColumnResponse(created, []cardResponse{})})
 }
 
@@ -261,18 +288,24 @@ func (h *BoardHandler) UpdateColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	columnID := chi.URLParam(r, "id")
 
+	var events []board.Event
 	if input.Title != nil {
-		if _, err := h.service.RenameColumn(r.Context(), userID, columnID, *input.Title); err != nil {
+		renamed, err := h.service.RenameColumn(r.Context(), userID, columnID, *input.Title)
+		if err != nil {
 			writeError(w, r, h.logger, err)
 			return
 		}
+		events = append(events, renamed...)
 	}
 	if input.Position != nil {
-		if _, err := h.service.ReorderColumn(r.Context(), userID, columnID, input.Position); err != nil {
+		moved, err := h.service.ReorderColumn(r.Context(), userID, columnID, input.Position)
+		if err != nil {
 			writeError(w, r, h.logger, err)
 			return
 		}
+		events = append(events, moved...)
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -284,10 +317,12 @@ func (h *BoardHandler) DeleteColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.service.DeleteColumn(r.Context(), userID, chi.URLParam(r, "id")); err != nil {
+	events, err := h.service.DeleteColumn(r.Context(), userID, chi.URLParam(r, "id"))
+	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -306,11 +341,12 @@ func (h *BoardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, _, err := h.service.CreateCard(r.Context(), userID, chi.URLParam(r, "id"), input.Title, input.Position)
+	created, events, err := h.service.CreateCard(r.Context(), userID, chi.URLParam(r, "id"), input.Title, input.Position)
 	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	writeJSON(w, http.StatusCreated, cardEnvelope{Card: toCardResponse(created)})
 }
 
@@ -329,18 +365,24 @@ func (h *BoardHandler) UpdateCard(w http.ResponseWriter, r *http.Request) {
 	}
 	cardID := chi.URLParam(r, "id")
 
+	var events []board.Event
 	if input.Title != nil || input.Description != nil {
-		if _, err := h.service.EditCard(r.Context(), userID, cardID, input.Title, input.Description); err != nil {
+		edited, err := h.service.EditCard(r.Context(), userID, cardID, input.Title, input.Description)
+		if err != nil {
 			writeError(w, r, h.logger, err)
 			return
 		}
+		events = append(events, edited...)
 	}
 	if input.ColumnID != nil || input.Position != nil {
-		if _, err := h.service.MoveCard(r.Context(), userID, cardID, input.ColumnID, input.Position); err != nil {
+		moved, err := h.service.MoveCard(r.Context(), userID, cardID, input.ColumnID, input.Position)
+		if err != nil {
 			writeError(w, r, h.logger, err)
 			return
 		}
+		events = append(events, moved...)
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -352,9 +394,11 @@ func (h *BoardHandler) DeleteCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.service.DeleteCard(r.Context(), userID, chi.URLParam(r, "id")); err != nil {
+	events, err := h.service.DeleteCard(r.Context(), userID, chi.URLParam(r, "id"))
+	if err != nil {
 		writeError(w, r, h.logger, err)
 		return
 	}
+	h.publish(r, events)
 	w.WriteHeader(http.StatusNoContent)
 }

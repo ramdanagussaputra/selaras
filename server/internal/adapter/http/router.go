@@ -17,11 +17,13 @@ import (
 type RouterConfig struct {
 	Logger          *slog.Logger
 	Pinger          health.Pinger
-	CORSOrigin      string            // empty disables the CORS middleware
-	AuthService     *appauth.Service  // nil disables the /api/v1 auth routes
-	BoardService    *appboard.Service // nil disables the /api/v1 board routes
-	SecureCookies   bool              // true sets Secure on the refresh cookie (prod)
-	RefreshTokenTTL time.Duration     // refresh cookie max-age
+	CORSOrigin      string               // empty disables the CORS middleware
+	AuthService     *appauth.Service     // nil disables the /api/v1 auth routes
+	BoardService    *appboard.Service    // nil disables the /api/v1 board routes
+	Broadcaster     appboard.Broadcaster // nil → board mutations broadcast nowhere (no-op)
+	WSHandler       http.Handler         // nil disables the /api/v1/ws endpoint
+	SecureCookies   bool                 // true sets Secure on the refresh cookie (prod)
+	RefreshTokenTTL time.Duration        // refresh cookie max-age
 }
 
 // NewRouter assembles middleware and routes. Order matters: the request ID
@@ -68,6 +70,13 @@ func mountAuthRoutes(r chi.Router, config RouterConfig) {
 		if config.BoardService != nil {
 			mountBoardRoutes(apiRouter, config)
 		}
+
+		// The WebSocket endpoint authenticates on its first message, not via the
+		// Bearer middleware (browsers can't set headers on a WS handshake), so it
+		// is mounted outside the requireAuth group (design D6).
+		if config.WSHandler != nil {
+			apiRouter.Method(http.MethodGet, "/ws", config.WSHandler)
+		}
 	})
 }
 
@@ -76,7 +85,7 @@ func mountAuthRoutes(r chi.Router, config RouterConfig) {
 // addressed top-level (PATCH/DELETE /columns/{id}, /cards/{id}); the use cases
 // resolve the owning board from the leaf id for authorization (design D7).
 func mountBoardRoutes(apiRouter chi.Router, config RouterConfig) {
-	handler := NewBoardHandler(config.BoardService, config.Logger)
+	handler := NewBoardHandler(config.BoardService, config.Broadcaster, config.Logger)
 
 	apiRouter.Group(func(protected chi.Router) {
 		protected.Use(requireAuth(config.AuthService, config.Logger))

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	httpadapter "github.com/ramdanaguss/selaras/server/internal/adapter/http"
 	"github.com/ramdanaguss/selaras/server/internal/adapter/postgres"
 	"github.com/ramdanaguss/selaras/server/internal/adapter/security"
+	"github.com/ramdanaguss/selaras/server/internal/adapter/ws"
 	appauth "github.com/ramdanaguss/selaras/server/internal/app/auth"
 	appboard "github.com/ramdanaguss/selaras/server/internal/app/board"
 	"github.com/ramdanaguss/selaras/server/internal/config"
@@ -64,12 +66,20 @@ func run() error {
 
 	boardService := appboard.NewService(postgres.NewBoardRepository(pool), security.SystemClock{})
 
+	// The WebSocket wsHub runs for the life of the process; cancelling ctx (on
+	// SIGTERM) closes every connection with 1001 (design D10).
+	wsHub := ws.NewHub(logger)
+	go wsHub.Run(ctx)
+	wsHandler := ws.NewHandler(wsHub, authService, boardService.IsMember, originPatterns(configuration.CORSOrigin), logger)
+
 	router := httpadapter.NewRouter(httpadapter.RouterConfig{
 		Logger:          logger,
 		Pinger:          postgres.NewPinger(pool),
 		CORSOrigin:      configuration.CORSOrigin,
 		AuthService:     authService,
 		BoardService:    boardService,
+		Broadcaster:     wsHub,
+		WSHandler:       wsHandler,
 		SecureCookies:   configuration.Env == config.EnvProduction,
 		RefreshTokenTTL: configuration.RefreshTokenTTL,
 	})
@@ -104,6 +114,21 @@ func run() error {
 	logger.Info("shutdown complete")
 
 	return nil
+}
+
+// originPatterns authorizes the browser origin for the WebSocket handshake. In
+// dev the SPA runs on a different port (the CORS origin), so its host must be
+// allow-listed; in prod the SPA is served same-origin, so nil (the library's
+// same-origin default) suffices.
+func originPatterns(corsOrigin string) []string {
+	if corsOrigin == "" {
+		return nil
+	}
+	parsed, err := url.Parse(corsOrigin)
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	return []string{parsed.Host}
 }
 
 func newLogger(environment string) *slog.Logger {
