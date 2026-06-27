@@ -47,6 +47,16 @@ func (s *Service) ListBoards(ctx context.Context, userID string) ([]domain.Board
 	return s.repo.ListBoards(ctx, userID)
 }
 
+// IsMember reports whether the user may access a board — the gate the WebSocket
+// handler applies before joining a connection to that board's room (design D6).
+func (s *Service) IsMember(ctx context.Context, boardID, userID string) (bool, error) {
+	membership, err := s.repo.MembershipByBoard(ctx, boardID, userID)
+	if err != nil {
+		return false, err
+	}
+	return membership.Found, nil
+}
+
 // GetBoard returns a board with its columns and cards nested and ordered by
 // position. It runs three ordered reads and assembles the tree in Go rather than
 // an N+1 walk or a json_agg blob (design D6); access is member-gated.

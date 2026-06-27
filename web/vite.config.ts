@@ -9,7 +9,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      // ws: true forwards the /api/v1/ws WebSocket upgrade to the Go server.
+      '/api': { target: 'http://localhost:8080', ws: true },
       '/healthz': 'http://localhost:8080',
     },
   },

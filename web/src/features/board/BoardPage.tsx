@@ -23,6 +23,18 @@ import {
   useMoveCard,
   useReorderColumn,
 } from './hooks';
+import { type ChannelState, useBoardChannel } from './useBoardChannel';
+
+// ConnectionIndicator shows whether live updates are flowing for this board.
+function ConnectionIndicator({ state }: Readonly<{ state: ChannelState }>) {
+  const live = state === 'live';
+  return (
+    <span className={`flex items-center gap-1 text-xs ${live ? 'text-green-600' : 'text-amber-600'}`}>
+      <span className={`h-2 w-2 rounded-full ${live ? 'bg-green-500' : 'bg-amber-400'}`} />
+      {live ? 'Live' : state === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+    </span>
+  );
+}
 
 // columnIdFromOver resolves which column the drop landed in, whether the pointer
 // is over a column header, a card, or an empty column body.
@@ -50,6 +62,9 @@ export function BoardPage() {
   const createColumn = useCreateColumn(boardId);
   const createCard = useCreateCard(boardId);
   const deleteColumn = useDeleteColumn(boardId);
+
+  // Subscribe to live updates for this board (patches the same Query cache).
+  const channelState = useBoardChannel(boardId);
 
   const [activeCard, setActiveCard] = useState<CardData | null>(null);
   const [highlightColumnId, setHighlightColumnId] = useState<string | null>(null);
@@ -127,7 +142,10 @@ export function BoardPage() {
 
   return (
     <section>
-      <h1 className="mb-4 text-2xl font-semibold">{tree.board.title}</h1>
+      <div className="mb-4 flex items-center gap-3">
+        <h1 className="text-2xl font-semibold">{tree.board.title}</h1>
+        <ConnectionIndicator state={channelState} />
+      </div>
 
       <DndContext
         sensors={sensors}
