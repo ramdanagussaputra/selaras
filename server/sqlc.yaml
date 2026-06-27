@@ -1,0 +1,25 @@
+# sqlc generates typed Go from the SQL in queries/ against the schema in the
+# migration files, so the migrations stay the single source of truth (design D5).
+# Generated code lands in internal/adapter/postgres/sqlcgen and is committed; CI
+# asserts `make sqlc-generate` produces no diff.
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/adapter/postgres/queries"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/adapter/postgres/sqlcgen"
+        sql_package: "pgx/v5"
+        emit_json_tags: false
+        emit_interface: true
+        emit_empty_slices: true
+        # ids cross the port as plain strings (the domain is stdlib-only, no
+        # pgtype), and times as time.Time; queries cast uuid columns to/from text
+        # so these map cleanly without a pgtype dance in the adapter.
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"

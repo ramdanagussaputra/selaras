@@ -8,10 +8,11 @@ JWT_SECRET   ?= dev-only-insecure-jwt-secret-change-me
 
 MIGRATE        := cd server && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 GOLANGCI_LINT  := cd server && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+SQLC           := cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
 MIGRATIONS_DIR := migrations
 
 .PHONY: dev dev-server dev-web test test-server test-web lint lint-server lint-web \
-        migrate-up migrate-down migrate-new
+        migrate-up migrate-down migrate-new sqlc-generate sqlc-check
 
 ## dev: run the Go API (:8080) and the Vite dev server (:5173) together
 dev:
@@ -51,3 +52,12 @@ migrate-down:
 migrate-new:
 	@test -n "$(name)" || (echo "usage: make migrate-new name=<snake_case_name>" && exit 1)
 	$(MIGRATE) create -dir $(MIGRATIONS_DIR) -seq -digits 4 -ext sql $(name)
+
+## sqlc-generate: regenerate typed Go from the SQL queries (committed; design D5)
+sqlc-generate:
+	$(SQLC) generate
+
+## sqlc-check: fail if the committed sqlc output is stale (CI gate, design D5)
+sqlc-check: sqlc-generate
+	@git diff --exit-code -- server/internal/adapter/postgres/sqlcgen \
+		|| (echo "sqlc output is stale: run 'make sqlc-generate' and commit" && exit 1)
