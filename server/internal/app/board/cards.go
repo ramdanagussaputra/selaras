@@ -45,7 +45,9 @@ func (s *Service) CreateCard(
 		return domain.Card{}, nil, err
 	}
 
-	events := []domain.Event{domain.CardCreated{ColumnID: columnID, CardID: card.ID, Position: card.Position}}
+	events := []domain.Event{domain.CardCreated{
+		BoardID: membership.BoardID, ColumnID: columnID, CardID: card.ID, Position: card.Position,
+	}}
 	return card, events, nil
 }
 
@@ -86,7 +88,7 @@ func (s *Service) EditCard(
 	if err := s.repo.UpdateCardContent(ctx, cardID, newTitle, newDescription, s.clock.Now()); err != nil {
 		return nil, err
 	}
-	return []domain.Event{domain.CardUpdated{CardID: cardID}}, nil
+	return []domain.Event{domain.CardUpdated{BoardID: membership.BoardID, CardID: cardID}}, nil
 }
 
 // MoveCard moves a card within or across columns to targetIndex, as a single-row
@@ -138,6 +140,7 @@ func (s *Service) MoveCard(
 	}
 
 	return []domain.Event{domain.CardMoved{
+		BoardID:      membership.BoardID,
 		CardID:       cardID,
 		FromColumnID: card.ColumnID,
 		ToColumnID:   destinationColumnID,
@@ -158,5 +161,5 @@ func (s *Service) DeleteCard(ctx context.Context, userID, cardID string) ([]doma
 	if err := s.repo.DeleteCard(ctx, cardID); err != nil {
 		return nil, err
 	}
-	return []domain.Event{domain.CardDeleted{CardID: cardID}}, nil
+	return []domain.Event{domain.CardDeleted{BoardID: membership.BoardID, CardID: cardID}}, nil
 }

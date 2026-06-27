@@ -2,10 +2,12 @@ package board
 
 // Event is a domain event describing a change a use case made. It is a *sealed*
 // interface: the marker method is unexported, so only types declared in this
-// package can satisfy it, and a future broadcaster can switch over them
-// exhaustively. Use cases return []Event; in M3 the HTTP layer discards them,
-// and M4 forwards them to a Broadcaster port for realtime fan-out (design D4).
-// Events live in the pure domain so nothing about them depends on transport.
+// package can satisfy it, and a broadcaster can switch over them exhaustively.
+// Use cases return []Event; in M3 the HTTP layer discards them, and M4 forwards
+// them to a Broadcaster port for realtime fan-out (design D4). Every event
+// carries its BoardID so the ws adapter can route it to that board's room when it
+// maps the event to the wire envelope. Events live in the pure domain so nothing
+// about them depends on transport.
 type Event interface {
 	isBoardEvent()
 }
@@ -52,8 +54,10 @@ type ColumnDeleted struct {
 	ColumnID string
 }
 
-// CardCreated is emitted when a card is added to a column.
+// CardCreated is emitted when a card is added to a column. BoardID is the owning
+// board (the room the event routes to).
 type CardCreated struct {
+	BoardID  string
 	ColumnID string
 	CardID   string
 	Position Position
@@ -61,12 +65,14 @@ type CardCreated struct {
 
 // CardUpdated is emitted when a card's title or description changes.
 type CardUpdated struct {
-	CardID string
+	BoardID string
+	CardID  string
 }
 
 // CardMoved is emitted when a card changes position, column, or both. It carries
 // everything a broadcaster needs to relocate the card on a peer's board.
 type CardMoved struct {
+	BoardID      string
 	CardID       string
 	FromColumnID string
 	ToColumnID   string
@@ -75,7 +81,8 @@ type CardMoved struct {
 
 // CardDeleted is emitted when a card is deleted.
 type CardDeleted struct {
-	CardID string
+	BoardID string
+	CardID  string
 }
 
 func (Created) isBoardEvent()       {}
